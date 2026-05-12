@@ -1,0 +1,1065 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SIS Simulator — Nuclear Cooling & Grid</title>
+    <style>
+      :root {
+        --bg: #0c0e12;
+        --panel: #12151c;
+        --border: #2a3140;
+        --text: #c8d0e0;
+        --muted: #7a8699;
+        --accent: #3b82f6;
+        --danger: #ef4444;
+        --warn: #f59e0b;
+        --ok: #22c55e;
+        --reactor: #dc2626;
+        --toxic: #39ff14;
+        --mono: ui-monospace, "SF Mono", Consolas, monospace;
+        --shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font: 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        color: var(--text);
+        background: radial-gradient(1200px 600px at 50% -20%, #1a2233 0%, var(--bg) 55%);
+        min-height: 100vh;
+      }
+
+      .app {
+        max-width: 1160px;
+        margin: 0 auto;
+        padding: 20px 18px 40px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .top {
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: flex-start;
+      }
+
+      .titleBlock h1 {
+        margin: 0;
+        font-size: 1.45rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+
+      .titleBlock p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 0.88rem;
+        max-width: 560px;
+      }
+
+      .phasePill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        font-weight: 800;
+        font-size: 0.85rem;
+      }
+
+      .phasePill .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--muted);
+        box-shadow: 0 0 12px currentColor;
+      }
+
+      .flowPanel {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--panel);
+        padding: 16px;
+        box-shadow: var(--shadow);
+      }
+
+      .flowTitle {
+        font-size: 0.78rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        margin-bottom: 14px;
+      }
+
+      .energyFlow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .node {
+        flex: 1 1 140px;
+        min-width: 120px;
+        border-radius: 12px;
+        border: 2px solid var(--border);
+        padding: 12px 14px;
+        text-align: center;
+        background: rgba(0, 0, 0, 0.25);
+        transition: border-color 0.25s, box-shadow 0.25s, background 0.25s;
+      }
+
+      .nodeLabel {
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      .node h3 {
+        margin: 0;
+        font-size: 1rem;
+      }
+
+      .node.reactor-active {
+        border-color: var(--reactor);
+        box-shadow: 0 0 24px rgba(220, 38, 38, 0.25);
+        color: #fecaca;
+      }
+
+      .node.turbine-spin {
+        border-color: var(--warn);
+        color: #fde68a;
+        box-shadow: 0 0 22px rgba(245, 158, 11, 0.2);
+      }
+
+      .node.grid-live {
+        border-color: var(--ok);
+        color: #bbf7d0;
+        box-shadow: 0 0 22px rgba(34, 197, 94, 0.18);
+      }
+
+      .arrow {
+        font-size: 1.6rem;
+        color: var(--border);
+        flex: 0 0 auto;
+        transition: color 0.25s;
+      }
+
+      .arrow.live {
+        color: var(--ok);
+      }
+
+      .arrow.idle {
+        color: #3f4b5c;
+      }
+
+      .turbineIcon {
+        display: inline-block;
+        font-size: 1.5rem;
+        line-height: 1;
+      }
+
+      .turbineIcon.spin {
+        animation: spin 0.6s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .mainGrid {
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        gap: 16px;
+        align-items: start;
+      }
+
+      @media (max-width: 980px) {
+        .mainGrid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .panel {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--panel);
+        padding: 14px 16px;
+        box-shadow: var(--shadow);
+      }
+
+      .panel h2 {
+        margin: 0 0 12px;
+        font-size: 0.82rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--muted);
+      }
+
+      .gauges {
+        display: grid;
+        gap: 14px;
+      }
+
+      .tempBlock .tempReadout {
+        font-family: var(--mono);
+        font-size: 2.1rem;
+        font-weight: 900;
+        margin-bottom: 8px;
+        letter-spacing: -0.03em;
+        transition: color 0.2s ease-out;
+      }
+
+      .tempReadout.tempLow {
+        color: #22c55e;
+      }
+
+      .tempReadout.tempMid {
+        color: #eab308;
+      }
+
+      .tempReadout.tempHigh {
+        color: #f97316;
+      }
+
+      .tempReadout.tempCritical {
+        color: #ef4444;
+        text-shadow: 0 0 18px rgba(239, 68, 68, 0.35);
+      }
+
+      .tempScale {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.72rem;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      .tempTrack {
+        height: 22px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: linear-gradient(
+          90deg,
+          #22c55e 0%,
+          #eab308 35%,
+          #f97316 65%,
+          #dc2626 100%
+        );
+        position: relative;
+        overflow: hidden;
+      }
+
+      .tempTrackInner {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.35);
+      }
+
+      .tempMarker {
+        position: absolute;
+        top: -3px;
+        width: 4px;
+        height: 28px;
+        background: #fff;
+        border-radius: 2px;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        transform: translateX(-50%);
+        transition: left 0.15s ease-out;
+      }
+
+      .tempMarkersLine {
+        display: flex;
+        gap: 16px;
+        margin-top: 8px;
+        font-size: 0.75rem;
+        color: var(--muted);
+        flex-wrap: wrap;
+      }
+
+      .tankOuter {
+        display: flex;
+        gap: 14px;
+        align-items: stretch;
+      }
+
+      .tankViz {
+        width: 64px;
+        border-radius: 10px;
+        border: 2px solid var(--border);
+        background: rgba(0, 0, 0, 0.35);
+        position: relative;
+        overflow: hidden;
+        min-height: 160px;
+      }
+
+      .tankOuter.cracked .tankViz {
+        border-color: var(--toxic);
+        box-shadow: 0 0 20px rgba(57, 255, 20, 0.35);
+      }
+
+      .tankFill {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        transition: height 0.2s ease-out, background 0.25s;
+      }
+
+      .tankMeta {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        justify-content: center;
+      }
+
+      .tankCrack {
+        font-size: 1.8rem;
+        display: none;
+      }
+
+      .tankOuter.cracked .tankCrack {
+        display: block;
+      }
+
+      .elecRow {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .elecBig {
+        font-family: var(--mono);
+        font-size: 1.5rem;
+        font-weight: 900;
+      }
+
+      .elecSub {
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+
+      .elecTrack {
+        height: 14px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(0, 0, 0, 0.3);
+        margin-top: 10px;
+        overflow: hidden;
+      }
+
+      .elecFill {
+        height: 100%;
+        background: linear-gradient(90deg, #2563eb, #38bdf8);
+        border-radius: 999px;
+        transition: width 0.15s ease-out;
+      }
+
+      .statusGrid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
+      .badge {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        font-size: 0.82rem;
+        background: rgba(0, 0, 0, 0.2);
+      }
+
+      .badge span:last-child {
+        font-weight: 800;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+      }
+
+      .badge .on {
+        color: var(--ok);
+      }
+
+      .badge .off {
+        color: var(--muted);
+      }
+
+      .controls .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .btn {
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text);
+        padding: 10px 14px;
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 0.9rem;
+        flex: 1 1 140px;
+      }
+
+      .btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .btn:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .btnPrimary {
+        border-color: rgba(59, 130, 246, 0.6);
+        background: rgba(59, 130, 246, 0.15);
+      }
+
+      .btnToggleOn {
+        border-color: rgba(245, 158, 11, 0.55);
+        background: rgba(245, 158, 11, 0.14);
+      }
+
+      .btnDanger {
+        border-color: rgba(239, 68, 68, 0.55);
+        background: rgba(239, 68, 68, 0.12);
+      }
+
+      .log {
+        max-height: 220px;
+        overflow-y: auto;
+        font-family: var(--mono);
+        font-size: 0.78rem;
+        line-height: 1.45;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px;
+        background: rgba(0, 0, 0, 0.35);
+      }
+
+      .logEntry {
+        margin-bottom: 6px;
+        color: var(--muted);
+      }
+
+      .logEntry b {
+        color: var(--text);
+        font-weight: 700;
+      }
+
+      .meltdownBanner {
+        display: none;
+        border: 2px solid var(--danger);
+        border-radius: 14px;
+        padding: 16px;
+        background: rgba(127, 29, 29, 0.35);
+        text-align: center;
+      }
+
+      .meltdownBanner.active {
+        display: block;
+      }
+
+      .meltdownBanner h3 {
+        margin: 0 0 8px;
+        font-size: 1.15rem;
+        color: #fecaca;
+      }
+
+      .lockBanner {
+        display: none;
+        margin-top: 10px;
+        padding: 12px;
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.5);
+        border: 1px solid var(--border);
+        font-weight: 800;
+        color: var(--danger);
+      }
+
+      .lockBanner.active {
+        display: block;
+      }
+
+      .hint {
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="top">
+        <div class="titleBlock">
+          <h1>Safety Instrumented System (SIS) Simulator</h1>
+          <p>
+            Fail-safe automation for a simplified nuclear cooling train: reactor heat, turbine generation,
+            emergency SIS trip, coolant recovery, and catastrophic failure paths.
+          </p>
+        </div>
+        <div id="phasePill" class="phasePill">
+          <span class="dot" id="phaseDot"></span>
+          <span id="phaseText">IDLE</span>
+        </div>
+      </div>
+
+      <div id="meltdownBanner" class="meltdownBanner">
+        <h3>☢️ MELTDOWN — EVACUATE</h3>
+        <p id="meltdownCountdown" class="hint" style="margin: 0; font-size: 1rem; color: #fecaca"></p>
+        <div id="lockBanner" class="lockBanner">Containment sealed — full lockdown. Reset simulation.</div>
+      </div>
+
+      <section class="flowPanel" aria-label="Energy flow diagram">
+        <div class="flowTitle">Energy flow</div>
+        <div class="energyFlow">
+          <div id="nodeReactor" class="node">
+            <div class="nodeLabel">Reactor core</div>
+            <h3>Heat source</h3>
+          </div>
+          <div id="arrow1" class="arrow">→</div>
+          <div id="nodeTurbine" class="node">
+            <div class="nodeLabel">Steam turbine</div>
+            <h3><span id="turbineGlyph" class="turbineIcon">⚙</span> Turbine</h3>
+          </div>
+          <div id="arrow2" class="arrow">→</div>
+          <div id="nodeGrid" class="node">
+            <div class="nodeLabel">Power grid</div>
+            <h3>Distribution</h3>
+          </div>
+        </div>
+      </section>
+
+      <div class="mainGrid">
+        <div class="gauges">
+          <div class="panel tempBlock">
+            <h2>Core temperature</h2>
+            <div id="tempReadout" class="tempReadout">400 °C</div>
+            <div class="tempScale">
+              <span>0 °C</span>
+              <span>1000 °C</span>
+              <span>Meltdown: 1200 °C</span>
+            </div>
+            <div class="tempTrack" aria-hidden="true">
+              <div class="tempTrackInner"></div>
+              <div id="tempMarker" class="tempMarker" style="left: 0%"></div>
+            </div>
+            <div class="tempMarkersLine">
+              <span>SIS trip: 800 °C</span>
+              <span>Safe: 200 °C</span>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2>Coolant storage tank</h2>
+            <div id="tankWrap" class="tankOuter">
+              <div class="tankViz" aria-hidden="true">
+                <div id="tankFill" class="tankFill" style="height: 0%"></div>
+              </div>
+              <div class="tankMeta">
+                <div class="tankCrack" aria-hidden="true">⚠️</div>
+                <div><strong id="tankLiters">5000 L</strong> / 5000 L</div>
+                <div class="hint" id="tankHint">Emergency inventory for cooling cycle.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2>Electricity storage</h2>
+            <div class="elecRow">
+              <span class="elecBig"><span id="elecStored">0</span> MWh</span>
+              <span class="elecSub">Cap: 10,000 MWh</span>
+            </div>
+            <div class="elecTrack">
+              <div id="elecFill" class="elecFill" style="width: 0%"></div>
+            </div>
+            <p class="hint" id="elecRate">Output: 0 MWh/tick (turbine idle)</p>
+          </div>
+
+          <div class="panel">
+            <h2>Component status</h2>
+            <div class="statusGrid" id="statusGrid"></div>
+          </div>
+
+          <div class="panel">
+            <h2>Event log</h2>
+            <div id="eventLog" class="log" role="log" aria-live="polite"></div>
+          </div>
+        </div>
+
+        <div class="panel controls">
+          <h2>Operator controls</h2>
+          <div class="row">
+            <button type="button" id="btnStart" class="btn btnPrimary">▶ Start simulation</button>
+            <button type="button" id="btnReset" class="btn">↺ Reset</button>
+          </div>
+          <div class="row">
+            <button type="button" id="btnHeat" class="btn" disabled>🔥 Inject heat: OFF</button>
+            <button type="button" id="btnRestart" class="btn" disabled>🔋 Manual restart</button>
+          </div>
+          <div class="row">
+            <button type="button" id="btnMeltdown" class="btn btnDanger" disabled>☢️ Trigger meltdown</button>
+          </div>
+          <p class="hint">
+            Tick: 300 ms. Normal heating +8 °C/tick; turbine engages above 300 °C with grid connected.
+            SIS auto-trip above 800 °C. Standby requires manual restart after tank refill.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const THRESHOLD_TEMP = 800;
+      const SAFE_TEMP = 200;
+      const MELTDOWN_TEMP = 1200;
+      const INITIAL_TEMP = 400;
+      const TURBINE_MIN_TEMP = 300;
+      const MAX_TANK_LEVEL = 5000;
+      const HEATING_RATE = 8;
+      const INJECT_EXTRA_HEAT = 24;
+      const COOLING_RATE = 15;
+      const UNCONTROLLED_HEAT = 10;
+      const WATER_USAGE_RATE = 50;
+      const FLUSH_RATE = 80;
+      const TICK_MS = 300;
+      const ELECTRICITY_GEN_RATE = 120;
+      const MAX_ELECTRICITY = 10000;
+      const LOG_MAX = 50;
+      const EVAC_SECONDS = 30;
+
+      const PHASE = {
+        IDLE: "idle",
+        NORMAL: "normal",
+        COOLING: "cooling",
+        FLUSH: "flush",
+        STANDBY: "standby",
+        MELTDOWN: "meltdown",
+        LOCKDOWN: "lockdown",
+      };
+
+      const PHASE_LABEL = {
+        idle: "Idle — press Start",
+        normal: "Normal operation",
+        cooling: "Cooling cycle (SIS)",
+        flush: "Flush / recovery",
+        standby: "Standby — inspection",
+        meltdown: "Meltdown",
+        lockdown: "Lockdown",
+      };
+
+      let timerId = null;
+      let evacRemaining = EVAC_SECONDS;
+      let meltdownCountdownActive = false;
+
+      const state = {
+        running: false,
+        phase: PHASE.IDLE,
+        tempC: INITIAL_TEMP,
+        tankL: MAX_TANK_LEVEL,
+        electricityMWh: 0,
+        heatInject: false,
+        gridConnected: true,
+        turbineSpinning: false,
+        fanOn: false,
+        pumpOn: false,
+        flushValveOpen: false,
+      };
+
+      const logBuffer = [];
+
+      function clamp(n, a, b) {
+        return Math.max(a, Math.min(b, n));
+      }
+
+      function fmtTime() {
+        const d = new Date();
+        return d.toLocaleTimeString(undefined, { hour12: false });
+      }
+
+      function logEvent(msg) {
+        logBuffer.push({ t: fmtTime(), msg });
+        while (logBuffer.length > LOG_MAX) logBuffer.shift();
+        const el = document.getElementById("eventLog");
+        el.innerHTML = logBuffer
+          .map((e) => `<div class="logEntry"><b>[${e.t}]</b> ${e.msg}</div>`)
+          .join("");
+        el.scrollTop = el.scrollHeight;
+      }
+
+      function setPhase(phase) {
+        state.phase = phase;
+      }
+
+      function turbineShouldRun() {
+        return (
+          state.phase === PHASE.NORMAL &&
+          state.gridConnected &&
+          state.tempC > TURBINE_MIN_TEMP
+        );
+      }
+
+      function triggerEmergencyShutdown(reason) {
+        state.gridConnected = false;
+        state.turbineSpinning = false;
+        state.fanOn = true;
+        state.pumpOn = true;
+        setPhase(PHASE.COOLING);
+        logEvent(`SIS EMERGENCY: ${reason} — grid isolated, fan & pump engaged, cooling cycle.`);
+      }
+
+      function resetSimulation() {
+        if (timerId) {
+          clearInterval(timerId);
+          timerId = null;
+        }
+        state.running = false;
+        state.phase = PHASE.IDLE;
+        state.tempC = INITIAL_TEMP;
+        state.tankL = MAX_TANK_LEVEL;
+        state.electricityMWh = 0;
+        state.heatInject = false;
+        state.gridConnected = true;
+        state.turbineSpinning = false;
+        state.fanOn = false;
+        state.pumpOn = false;
+        state.flushValveOpen = false;
+        evacRemaining = EVAC_SECONDS;
+        meltdownCountdownActive = false;
+        logBuffer.length = 0;
+        document.getElementById("meltdownBanner").classList.remove("active");
+        document.getElementById("lockBanner").classList.remove("active");
+        document.getElementById("btnStart").disabled = false;
+        document.getElementById("btnHeat").disabled = true;
+        document.getElementById("btnRestart").disabled = true;
+        document.getElementById("btnMeltdown").disabled = true;
+        syncHeatButton();
+        logEvent("Simulation reset to initial conditions.");
+        render();
+      }
+
+      function startSimulation() {
+        if (state.running) return;
+        state.running = true;
+        setPhase(PHASE.NORMAL);
+        state.gridConnected = true;
+        document.getElementById("btnStart").disabled = true;
+        document.getElementById("btnHeat").disabled = false;
+        document.getElementById("btnMeltdown").disabled = false;
+        logEvent("Simulation started — normal operation.");
+        if (timerId) clearInterval(timerId);
+        timerId = setInterval(tick, TICK_MS);
+        render();
+      }
+
+      function enterMeltdown(reason) {
+        if (state.phase === PHASE.MELTDOWN || state.phase === PHASE.LOCKDOWN) return;
+        setPhase(PHASE.MELTDOWN);
+        state.gridConnected = false;
+        state.turbineSpinning = false;
+        state.pumpOn = false;
+        state.flushValveOpen = false;
+        state.fanOn = false;
+        meltdownCountdownActive = true;
+        evacRemaining = EVAC_SECONDS;
+        logEvent(`MELTDOWN: ${reason}`);
+        document.getElementById("meltdownBanner").classList.add("active");
+        document.getElementById("lockBanner").classList.remove("active");
+      }
+
+      function tick() {
+        if (!state.running) return;
+
+        if (state.phase === PHASE.MELTDOWN && meltdownCountdownActive) {
+          evacRemaining -= TICK_MS / 1000;
+          if (evacRemaining <= 0) {
+            meltdownCountdownActive = false;
+            setPhase(PHASE.LOCKDOWN);
+            logEvent("Containment doors sealed — facility lockdown. No recovery.");
+            document.getElementById("lockBanner").classList.add("active");
+          }
+          render();
+          return;
+        }
+
+        if (state.phase === PHASE.LOCKDOWN || state.phase === PHASE.IDLE) {
+          render();
+          return;
+        }
+
+        if (state.phase === PHASE.STANDBY) {
+          state.turbineSpinning = false;
+          state.pumpOn = false;
+          state.flushValveOpen = false;
+          state.fanOn = false;
+          render();
+          return;
+        }
+
+        if (state.phase === PHASE.NORMAL) {
+          let add = HEATING_RATE;
+          if (state.heatInject) add += INJECT_EXTRA_HEAT;
+          state.tempC += add;
+
+          state.fanOn = false;
+          state.pumpOn = false;
+          state.flushValveOpen = false;
+
+          if (state.tempC > THRESHOLD_TEMP) {
+            triggerEmergencyShutdown(`Core temperature ${state.tempC.toFixed(0)} °C exceeded ${THRESHOLD_TEMP} °C`);
+          } else {
+            state.turbineSpinning = turbineShouldRun();
+            if (state.turbineSpinning) {
+              state.electricityMWh = clamp(
+                state.electricityMWh + ELECTRICITY_GEN_RATE,
+                0,
+                MAX_ELECTRICITY
+              );
+            }
+          }
+        } else if (state.phase === PHASE.COOLING) {
+          state.fanOn = true;
+          state.pumpOn = true;
+          state.flushValveOpen = false;
+          state.turbineSpinning = false;
+
+          if (state.tankL > 0) {
+            state.tempC = Math.max(0, state.tempC - COOLING_RATE);
+            state.tankL = clamp(state.tankL - WATER_USAGE_RATE, 0, MAX_TANK_LEVEL);
+          } else {
+            state.tempC += UNCONTROLLED_HEAT;
+          }
+
+          if (state.tankL <= 0 && state.tempC >= MELTDOWN_TEMP) {
+            enterMeltdown("Core ≥1200 °C with empty coolant tank — vessel compromise.");
+            render();
+            return;
+          }
+
+          if (state.tempC <= SAFE_TEMP) {
+            setPhase(PHASE.FLUSH);
+            state.pumpOn = false;
+            state.fanOn = false;
+            state.flushValveOpen = true;
+            logEvent(`Core cooled to ≤${SAFE_TEMP} °C — flush valve open, pump stopped.`);
+          }
+        } else if (state.phase === PHASE.FLUSH) {
+          state.pumpOn = false;
+          state.fanOn = false;
+          state.flushValveOpen = true;
+          state.turbineSpinning = false;
+          state.tankL = clamp(state.tankL + FLUSH_RATE, 0, MAX_TANK_LEVEL);
+          if (state.tankL >= MAX_TANK_LEVEL) {
+            setPhase(PHASE.STANDBY);
+            state.flushValveOpen = false;
+            state.gridConnected = false;
+            logEvent("Tank full — standby. Await inspection and manual restart.");
+            document.getElementById("btnRestart").disabled = false;
+          }
+        }
+
+        render();
+      }
+
+      function render() {
+        const phaseKey = state.phase;
+        const pill = document.getElementById("phasePill");
+        const dot = document.getElementById("phaseDot");
+        document.getElementById("phaseText").textContent =
+          PHASE_LABEL[phaseKey] || phaseKey;
+
+        const colors = {
+          idle: "#6b7280",
+          normal: "#22c55e",
+          cooling: "#3b82f6",
+          flush: "#f59e0b",
+          standby: "#9ca3af",
+          meltdown: "#ef4444",
+          lockdown: "#b91c1c",
+        };
+        dot.style.background = colors[phaseKey] || "#6b7280";
+        dot.style.color = colors[phaseKey] || "#6b7280";
+
+        const reactorHot =
+          state.phase === PHASE.NORMAL ||
+          state.phase === PHASE.COOLING ||
+          (state.tempC > TURBINE_MIN_TEMP && state.phase !== PHASE.STANDBY);
+        document.getElementById("nodeReactor").classList.toggle(
+          "reactor-active",
+          reactorHot && state.phase !== PHASE.LOCKDOWN
+        );
+
+        const spin =
+          state.turbineSpinning && state.phase === PHASE.NORMAL && state.gridConnected;
+        document.getElementById("nodeTurbine").classList.toggle("turbine-spin", spin);
+        document.getElementById("turbineGlyph").classList.toggle("spin", spin);
+
+        const gridLive =
+          state.gridConnected && state.phase === PHASE.NORMAL && spin;
+        document.getElementById("nodeGrid").classList.toggle("grid-live", gridLive);
+
+        const flow = spin;
+        document.getElementById("arrow1").classList.toggle("live", flow);
+        document.getElementById("arrow1").classList.toggle("idle", !flow);
+        document.getElementById("arrow2").classList.toggle("live", flow);
+        document.getElementById("arrow2").classList.toggle("idle", !flow);
+
+        const tempRounded = Math.round(state.tempC);
+        const tempReadoutEl = document.getElementById("tempReadout");
+        tempReadoutEl.textContent = `${tempRounded} °C`;
+        tempReadoutEl.classList.remove(
+          "tempLow",
+          "tempMid",
+          "tempHigh",
+          "tempCritical"
+        );
+        if (tempRounded >= 900) tempReadoutEl.classList.add("tempCritical");
+        else if (tempRounded >= 600) tempReadoutEl.classList.add("tempHigh");
+        else if (tempRounded >= 400) tempReadoutEl.classList.add("tempMid");
+        else tempReadoutEl.classList.add("tempLow");
+
+        const gaugeMax = MELTDOWN_TEMP;
+        const tempPct = clamp(state.tempC / gaugeMax, 0, 1) * 100;
+        document.getElementById("tempMarker").style.left = `${tempPct}%`;
+
+        document.getElementById("tankLiters").textContent = `${Math.round(state.tankL)} L`;
+        const tankPct = (state.tankL / MAX_TANK_LEVEL) * 100;
+        const fill = document.getElementById("tankFill");
+        fill.style.height = `${tankPct}%`;
+        let tcol = "#3b82f6";
+        if (tankPct <= 20) tcol = "#ef4444";
+        else if (tankPct <= 50) tcol = "#f59e0b";
+        if (
+          state.phase === PHASE.MELTDOWN ||
+          state.phase === PHASE.LOCKDOWN
+        ) {
+          tcol = "#39ff14";
+        }
+        fill.style.background = `linear-gradient(180deg, ${tcol}dd 0%, ${tcol} 100%)`;
+
+        const wrap = document.getElementById("tankWrap");
+        wrap.classList.toggle(
+          "cracked",
+          state.phase === PHASE.MELTDOWN || state.phase === PHASE.LOCKDOWN
+        );
+
+        document.getElementById("elecStored").textContent =
+          Math.round(state.electricityMWh).toString();
+        const elecPct = (state.electricityMWh / MAX_ELECTRICITY) * 100;
+        document.getElementById("elecFill").style.width = `${elecPct}%`;
+        const rate =
+          spin ? `${ELECTRICITY_GEN_RATE} MWh/tick` : "0 MWh/tick";
+        document.getElementById("elecRate").textContent =
+          `Output: ${rate} (${spin ? "turbine online" : "turbine idle"})`;
+
+        const statuses = [
+          ["Power grid", state.gridConnected && state.phase === PHASE.NORMAL],
+          ["Emergency fan", state.fanOn],
+          ["Coolant pump", state.pumpOn],
+          ["Flush valve", state.flushValveOpen],
+          ["Turbine", state.turbineSpinning],
+        ];
+        document.getElementById("statusGrid").innerHTML = statuses
+          .map(
+            ([name, on]) => `
+          <div class="badge">
+            <span>${name}</span>
+            <span class="${on ? "on" : "off"}">${on ? "Active" : "Idle"}</span>
+          </div>
+        `
+          )
+          .join("");
+
+        document.getElementById("btnRestart").disabled = state.phase !== PHASE.STANDBY;
+
+        const mBanner = document.getElementById("meltdownBanner");
+        if (state.phase === PHASE.MELTDOWN) {
+          mBanner.classList.add("active");
+          const secs = Math.max(0, Math.ceil(evacRemaining));
+          document.getElementById("meltdownCountdown").textContent =
+            `Facility evacuation: ${secs}s — toxic release in progress.`;
+        } else if (state.phase === PHASE.LOCKDOWN) {
+          mBanner.classList.add("active");
+          document.getElementById("meltdownCountdown").textContent =
+            "Containment sealed. Permanent lockdown.";
+        } else {
+          mBanner.classList.remove("active");
+        }
+
+        syncHeatButton();
+      }
+
+      function syncHeatButton() {
+        const btn = document.getElementById("btnHeat");
+        const on = state.heatInject;
+        btn.classList.toggle("btnToggleOn", on);
+        btn.textContent = on ? "🔥 Inject heat: ON" : "🔥 Inject heat: OFF";
+      }
+
+      document.getElementById("btnStart").addEventListener("click", startSimulation);
+
+      document.getElementById("btnReset").addEventListener("click", resetSimulation);
+
+      document.getElementById("btnHeat").addEventListener("click", () => {
+        if (!state.running || state.phase !== PHASE.NORMAL) return;
+        state.heatInject = !state.heatInject;
+        logEvent(`Manual heat injection ${state.heatInject ? "ENABLED" : "disabled"}.`);
+        syncHeatButton();
+      });
+
+      document.getElementById("btnRestart").addEventListener("click", () => {
+        if (state.phase !== PHASE.STANDBY) return;
+        setPhase(PHASE.NORMAL);
+        state.gridConnected = true;
+        state.tempC = INITIAL_TEMP;
+        state.heatInject = false;
+        syncHeatButton();
+        logEvent("Manual restart — returned to normal operation.");
+        render();
+      });
+
+      document.getElementById("btnMeltdown").addEventListener("click", () => {
+        if (!state.running) return;
+        if (state.phase === PHASE.MELTDOWN || state.phase === PHASE.LOCKDOWN) return;
+        state.tankL = 0;
+        state.tempC = 900;
+        logEvent("Sabotage: tank drained to 0 L, core flash to 900 °C.");
+        state.fanOn = false;
+        state.pumpOn = false;
+        state.flushValveOpen = false;
+        if (state.tempC > THRESHOLD_TEMP) {
+          triggerEmergencyShutdown("Sabotage — core beyond SIS threshold");
+        } else {
+          state.gridConnected = true;
+          setPhase(PHASE.NORMAL);
+        }
+        render();
+      });
+
+      resetSimulation();
+    </script>
+  </body>
+</html>
